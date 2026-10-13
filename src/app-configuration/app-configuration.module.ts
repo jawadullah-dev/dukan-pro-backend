@@ -5,7 +5,7 @@ import { AppConfigurationService } from './app-configuration.service.js';
 @Module({
   imports: [
     ConfigModule.forRoot({
-      envFilePath: `.env.${process.env.NODE_ENV ?? 'development'}`,
+      envFilePath: [`.env.${process.env.NODE_ENV ?? 'development'}`, '.env'],
       isGlobal: true,
       validate: (config: Record<string, unknown>) =>
         AppConfigurationService.validate(config),
