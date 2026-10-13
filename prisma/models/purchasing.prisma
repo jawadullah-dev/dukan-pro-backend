@@ -1,0 +1,106 @@
+// =============================================================================
+// MODULE 4 : SUPPLIERS, PURCHASES, SUPPLIER PAYMENTS
+// =============================================================================
+
+model Supplier {
+  id             String   @id @default(uuid(7)) @db.Uuid
+  shopId         String   @map("shop_id") @db.Uuid
+  name           String
+  phone          String?
+  address        String?
+  notes          String?
+  openingBalance BigInt   @default(0) @map("opening_balance") // old dues entered on day one
+  isSystem       Boolean  @default(false) @map("is_system") // the default "Walk-in seller"
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  shop             Shop              @relation(fields: [shopId], references: [id], onDelete: Restrict)
+  purchases        Purchase[]
+  supplierPayments SupplierPayment[]
+
+  @@index([shopId, name])
+  @@map("suppliers")
+}
+
+model Purchase {
+  id                 String       @id @default(uuid(7)) @db.Uuid
+  shopId             String       @map("shop_id") @db.Uuid
+  supplierId         String       @map("supplier_id") @db.Uuid
+  purchaseNo         String       @map("purchase_no") // automatic: P-0001
+  supplierInvoiceRef String?      @map("supplier_invoice_ref") // supplier's own paper number
+  purchaseDate       DateTime     @map("purchase_date") @db.Date
+  totalAmount        BigInt       @map("total_amount")
+  isOpeningStock     Boolean      @default(false) @map("is_opening_stock") // no payable, no cash
+  status             RecordStatus @default(ACTIVE)
+  cancelledAt        DateTime?    @map("cancelled_at") @db.Timestamptz(3)
+  cancelReason       String?      @map("cancel_reason")
+  cancelledById      String?      @map("cancelled_by_id") @db.Uuid
+  clientRequestId    String       @map("client_request_id") @db.Uuid // double-save protection
+  notes              String?
+  createdById        String       @map("created_by_id") @db.Uuid
+  createdAt          DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt          DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  shop        Shop     @relation(fields: [shopId], references: [id], onDelete: Restrict)
+  supplier    Supplier @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  createdBy   User     @relation("PurchaseCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  cancelledBy User?    @relation("PurchaseCancelledBy", fields: [cancelledById], references: [id], onDelete: Restrict)
+
+  items            PurchaseItem[]
+  supplierPayments SupplierPayment[]
+
+  @@unique([shopId, purchaseNo])
+  @@unique([shopId, clientRequestId])
+  @@index([shopId, purchaseDate])
+  @@index([supplierId, status])
+  @@map("purchases")
+}
+
+model PurchaseItem {
+  id         String @id @default(uuid(7)) @db.Uuid
+  shopId     String @map("shop_id") @db.Uuid
+  purchaseId String @map("purchase_id") @db.Uuid
+  productId  String @map("product_id") @db.Uuid
+  quantity   Int
+  unitCost   BigInt @map("unit_cost") // real cost at that time; never changes
+  totalCost  BigInt @map("total_cost")
+
+  shop     Shop     @relation(fields: [shopId], references: [id], onDelete: Restrict)
+  purchase Purchase @relation(fields: [purchaseId], references: [id], onDelete: Restrict)
+  product  Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  inventoryUnits InventoryUnit[]
+
+  @@index([purchaseId])
+  @@index([shopId, productId])
+  @@map("purchase_items")
+}
+
+model SupplierPayment {
+  id            String       @id @default(uuid(7)) @db.Uuid
+  shopId        String       @map("shop_id") @db.Uuid
+  supplierId    String       @map("supplier_id") @db.Uuid
+  purchaseId    String?      @map("purchase_id") @db.Uuid // null = paying the opening balance
+  amount        BigInt
+  paymentDate   DateTime     @map("payment_date") @db.Date
+  status        RecordStatus @default(ACTIVE)
+  cancelledAt   DateTime?    @map("cancelled_at") @db.Timestamptz(3)
+  cancelReason  String?      @map("cancel_reason")
+  cancelledById String?      @map("cancelled_by_id") @db.Uuid
+  notes         String?
+  createdById   String       @map("created_by_id") @db.Uuid
+  createdAt     DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  shop        Shop      @relation(fields: [shopId], references: [id], onDelete: Restrict)
+  supplier    Supplier  @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+  purchase    Purchase? @relation(fields: [purchaseId], references: [id], onDelete: Restrict)
+  createdBy   User      @relation("SupplierPaymentCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  cancelledBy User?     @relation("SupplierPaymentCancelledBy", fields: [cancelledById], references: [id], onDelete: Restrict)
+
+  @@index([shopId, supplierId])
+  @@index([purchaseId])
+  @@index([shopId, paymentDate])
+  @@map("supplier_payments")
+}

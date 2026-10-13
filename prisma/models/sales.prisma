@@ -1,0 +1,122 @@
+// =============================================================================
+// MODULE 6 : CUSTOMERS, SALES, PAYMENTS
+// =============================================================================
+
+model Customer {
+  id             String   @id @default(uuid(7)) @db.Uuid
+  shopId         String   @map("shop_id") @db.Uuid
+  name           String
+  phone          String?
+  address        String?
+  notes          String?
+  openingBalance BigInt   @default(0) @map("opening_balance") // old Udhar entered on day one
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  shop        Shop         @relation(fields: [shopId], references: [id], onDelete: Restrict)
+  sales       Sale[]
+  payments    Payment[]
+  saleReturns SaleReturn[]
+
+  @@index([shopId, name])
+  @@index([shopId, phone])
+  @@map("customers")
+}
+
+model Sale {
+  id              String       @id @default(uuid(7)) @db.Uuid
+  shopId          String       @map("shop_id") @db.Uuid
+  customerId      String?      @map("customer_id") @db.Uuid // null = walk-in (accessories only)
+  saleNo          String       @map("sale_no") // automatic: S-0001
+  saleDate        DateTime     @map("sale_date") @db.Timestamptz(3)
+  subtotal        BigInt
+  discount        BigInt       @default(0) // sale-level discount only
+  totalAmount     BigInt       @map("total_amount") // subtotal - discount
+  dueDate         DateTime?    @map("due_date") @db.Date
+  status          RecordStatus @default(ACTIVE)
+  cancelledAt     DateTime?    @map("cancelled_at") @db.Timestamptz(3)
+  cancelReason    String?      @map("cancel_reason")
+  cancelledById   String?      @map("cancelled_by_id") @db.Uuid
+  clientRequestId String       @map("client_request_id") @db.Uuid
+  notes           String?
+  createdById     String       @map("created_by_id") @db.Uuid
+  createdAt       DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  shop        Shop      @relation(fields: [shopId], references: [id], onDelete: Restrict)
+  customer    Customer? @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  createdBy   User      @relation("SaleCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  cancelledBy User?     @relation("SaleCancelledBy", fields: [cancelledById], references: [id], onDelete: Restrict)
+
+  items       SaleItem[]
+  payments    Payment[]
+  saleReturns SaleReturn[]
+
+  @@unique([shopId, saleNo])
+  @@unique([shopId, clientRequestId])
+  @@index([shopId, saleDate])
+  @@index([shopId, customerId, status])
+  @@map("sales")
+}
+
+model SaleItem {
+  id              String  @id @default(uuid(7)) @db.Uuid
+  shopId          String  @map("shop_id") @db.Uuid
+  saleId          String  @map("sale_id") @db.Uuid
+  productId       String  @map("product_id") @db.Uuid
+  inventoryUnitId String? @map("inventory_unit_id") @db.Uuid // phone: the IMEI unit, quantity = 1
+  quantity        Int
+  unitPrice       BigInt  @map("unit_price") // real price at sale time
+  unitCost        BigInt  @map("unit_cost") // real cost at sale time (for profit)
+  total           BigInt // quantity * unitPrice (no item-level discount)
+
+  shop          Shop           @relation(fields: [shopId], references: [id], onDelete: Restrict)
+  sale          Sale           @relation(fields: [saleId], references: [id], onDelete: Restrict)
+  product       Product        @relation(fields: [productId], references: [id], onDelete: Restrict)
+  inventoryUnit InventoryUnit? @relation(fields: [inventoryUnitId], references: [id], onDelete: Restrict)
+
+  returnItems ReturnItem[]
+
+  @@index([saleId])
+  @@index([shopId, productId])
+  @@index([inventoryUnitId])
+  @@map("sale_items")
+}
+
+// Customer payments. A walk-in cash sale has no customer. One Udhar payment can be
+// split across several sales (oldest first): those rows share receiptGroupId.
+model Payment {
+  id              String        @id @default(uuid(7)) @db.Uuid
+  shopId          String        @map("shop_id") @db.Uuid
+  customerId      String?       @map("customer_id") @db.Uuid
+  saleId          String?       @map("sale_id") @db.Uuid // null = paying the opening balance
+  receiptGroupId  String?       @map("receipt_group_id") @db.Uuid
+  amount          BigInt
+  paymentDate     DateTime      @map("payment_date") @db.Timestamptz(3)
+  method          PaymentMethod @default(CASH)
+  status          RecordStatus  @default(ACTIVE)
+  cancelledAt     DateTime?     @map("cancelled_at") @db.Timestamptz(3)
+  cancelReason    String?       @map("cancel_reason")
+  cancelledById   String?       @map("cancelled_by_id") @db.Uuid
+  // Several rows can share one request id (split payment), so uniqueness is an
+  // expression index on (shop_id, client_request_id, COALESCE(sale_id, zero-uuid)) in constraints.sql.
+  clientRequestId String        @map("client_request_id") @db.Uuid
+  notes           String?
+  createdById     String        @map("created_by_id") @db.Uuid
+  createdAt       DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  shop        Shop      @relation(fields: [shopId], references: [id], onDelete: Restrict)
+  customer    Customer? @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  sale        Sale?     @relation(fields: [saleId], references: [id], onDelete: Restrict)
+  createdBy   User      @relation("PaymentCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  cancelledBy User?     @relation("PaymentCancelledBy", fields: [cancelledById], references: [id], onDelete: Restrict)
+
+  @@index([saleId, status])
+  @@index([shopId, customerId, status])
+  @@index([shopId, paymentDate])
+  @@index([receiptGroupId])
+  @@index([shopId, clientRequestId])
+  @@map("payments")
+}

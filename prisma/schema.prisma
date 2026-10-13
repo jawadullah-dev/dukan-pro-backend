@@ -1,0 +1,46 @@
+// =============================================================================
+// Dukaan Pro - Prisma schema (ERD v2)
+// PostgreSQL | multi-tenant (shared database, shop_id on every business table)
+//
+// Conventions
+//  - IDs: UUID v7 (time-ordered)          - Money: BigInt in PAISA (Rs 100 = 10000)
+//  - DB columns snake_case, Prisma fields camelCase (@map / @@map)
+//  - Nothing is cascade-deleted: every relation is onDelete: Restrict.
+//    Master data is deactivated (isActive), money records are CANCELLED, never deleted.
+//  - Paid amount, outstanding (Udhar), supplier payable, current cash and the customer
+//    ledger are CALCULATED from records, never stored.
+//  - CHECK constraints, partial indexes, triggers and RLS live in constraints.sql
+//    (create it with: prisma migrate dev --create-only --name constraints).
+//
+// Release 1  : everything except the models marked "RELEASE 1.1"
+// Release 1.1: SaleReturn, ReturnItem, Refund, CashReconciliation
+// Release 1.2: ShopStoreSettings, ProductImage + online-store Product fields
+//
+// This schema is MULTI-FILE. Prisma merges every `.prisma` file under `prisma/`
+// into one logical schema; `prisma.config.ts` points `schema` at this folder.
+//   - enums.prisma            all 14 enums
+//   - models/tenant.prisma    Shop, User, PlatformAdmin
+//   - models/catalog.prisma   Category, Brand, Product, ProductImage
+//   - models/purchasing.prisma Supplier, Purchase, PurchaseItem, SupplierPayment
+//   - models/inventory.prisma InventoryUnit, StockLevel, InventoryMovement
+//   - models/sales.prisma     Customer, Sale, SaleItem, Payment
+//   - models/expenses.prisma  ExpenseCategory, Expense
+//   - models/cash.prisma      CashMovement, CashReconciliation
+//   - models/returns.prisma   SaleReturn, ReturnItem, Refund
+//   - models/online-store.prisma ShopStoreSettings
+// =============================================================================
+
+// Prisma 7: the generator is `prisma-client` (outputs TS into src/generated/prisma),
+// `output` is required, and `moduleFormat = "cjs"` is retained for the generated
+// client format. The application itself compiles to ESM. The connection URL
+// lives in prisma.config.ts.
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+  // No url here in Prisma 7 — prisma.config.ts supplies it.
+}

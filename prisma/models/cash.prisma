@@ -1,0 +1,47 @@
+// =============================================================================
+// MODULE 10 : CASH LEDGER (append-only) + Release 1.1 cash count
+// =============================================================================
+
+model CashMovement {
+  id                 String           @id @default(uuid(7)) @db.Uuid
+  shopId             String           @map("shop_id") @db.Uuid
+  type               CashMovementType
+  direction          CashDirection
+  amount             BigInt // always > 0; direction gives the sign
+  movementDate       DateTime         @map("movement_date") @db.Timestamptz(3)
+  referenceType      ReferenceType?   @map("reference_type")
+  referenceId        String?          @map("reference_id") @db.Uuid // polymorphic, no FK
+  // REVERSAL rows point to the movement they undo. @unique = one reversal per movement.
+  reversesMovementId String?          @unique @map("reverses_movement_id") @db.Uuid
+  isOverdraft        Boolean          @default(false) @map("is_overdraft") // saved after a "cash below zero" warning
+  note               String?
+  createdById        String           @map("created_by_id") @db.Uuid
+  createdAt          DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  shop             Shop          @relation(fields: [shopId], references: [id], onDelete: Restrict)
+  createdBy        User          @relation("CashMovementCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  reversesMovement CashMovement? @relation("MovementReversal", fields: [reversesMovementId], references: [id], onDelete: Restrict)
+  reversedBy       CashMovement? @relation("MovementReversal")
+
+  @@index([shopId, movementDate])
+  @@index([shopId, type])
+  @@index([referenceType, referenceId])
+  @@map("cash_movements")
+}
+
+model CashReconciliation {
+  id           String   @id @default(uuid(7)) @db.Uuid
+  shopId       String   @map("shop_id") @db.Uuid
+  systemCash   BigInt   @map("system_cash")
+  countedCash  BigInt   @map("counted_cash")
+  difference   BigInt // counted - system
+  reason       String? // required when difference != 0 (CHECK)
+  reconciledAt DateTime @default(now()) @map("reconciled_at") @db.Timestamptz(3)
+  createdById  String   @map("created_by_id") @db.Uuid
+
+  shop      Shop @relation(fields: [shopId], references: [id], onDelete: Restrict)
+  createdBy User @relation("ReconciliationCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@index([shopId, reconciledAt])
+  @@map("cash_reconciliations")
+}

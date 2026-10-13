@@ -1,0 +1,100 @@
+// -----------------------------------------------------------------------------
+// ENUMS (shared across every model file)
+// -----------------------------------------------------------------------------
+
+enum ShopStatus {
+  ACTIVE
+  SUSPENDED
+}
+
+enum UserRole {
+  OWNER
+  // later: MANAGER, CASHIER
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+}
+
+enum TrackingType {
+  QUANTITY // chargers, covers, cables ...
+  SERIALIZED // phones (IMEI)
+}
+
+enum UnitCondition {
+  NEW
+  USED
+}
+
+enum UnitStatus {
+  IN_STOCK
+  SOLD
+  DAMAGED
+  LOST
+  VOIDED // the purchase that created this unit was cancelled
+  // later: RESERVED, UNDER_REPAIR
+}
+
+// Used by sales, purchases, payments, supplier payments, expenses and returns.
+enum RecordStatus {
+  ACTIVE
+  CANCELLED
+}
+
+enum PaymentMethod {
+  CASH
+  // later: JAZZCASH, EASYPAISA, BANK, CARD
+}
+
+enum CashDirection {
+  IN
+  OUT
+}
+
+enum CashMovementType {
+  OPENING_CASH
+  CUSTOMER_PAYMENT
+  SUPPLIER_PAYMENT
+  EXPENSE
+  REVERSAL // created by "cancel with reason"
+  REFUND // Release 1.1
+  OWNER_INVESTMENT // Release 1.1
+  OWNER_WITHDRAWAL // Release 1.1
+  RECONCILIATION_ADJUSTMENT // Release 1.1
+}
+
+enum InventoryMovementType {
+  PURCHASE
+  SALE
+  SALE_CANCEL
+  PURCHASE_CANCEL
+  CUSTOMER_RETURN // Release 1.1
+  DAMAGED
+  LOST
+  ADJUSTMENT
+}
+
+// What a movement points to (reference_id has no FK on purpose: it is polymorphic).
+enum ReferenceType {
+  PURCHASE
+  SALE
+  PAYMENT
+  SUPPLIER_PAYMENT
+  EXPENSE
+  RETURN
+  REFUND
+  RECONCILIATION
+  MANUAL
+}
+
+enum ReturnCondition {
+  GOOD
+  DAMAGED
+}
+
+// Phone legal status in Pakistan. NULL on a product = not applicable (accessories).
+enum PtaStatus {
+  PTA_APPROVED
+  NON_PTA
+}

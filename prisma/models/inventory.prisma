@@ -1,0 +1,72 @@
+// =============================================================================
+// MODULE 5 : INVENTORY
+// =============================================================================
+
+// One row per physical phone (SERIALIZED products).
+model InventoryUnit {
+  id             String        @id @default(uuid(7)) @db.Uuid
+  shopId         String        @map("shop_id") @db.Uuid
+  productId      String        @map("product_id") @db.Uuid
+  purchaseItemId String        @map("purchase_item_id") @db.Uuid
+  imei1          String
+  imei2          String?
+  condition      UnitCondition @default(NEW)
+  unitCost       BigInt        @map("unit_cost")
+  status         UnitStatus    @default(IN_STOCK)
+  createdAt      DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  shop         Shop         @relation(fields: [shopId], references: [id], onDelete: Restrict)
+  product      Product      @relation(fields: [productId], references: [id], onDelete: Restrict)
+  purchaseItem PurchaseItem @relation(fields: [purchaseItemId], references: [id], onDelete: Restrict)
+
+  movements   InventoryMovement[]
+  saleItems   SaleItem[]
+  returnItems ReturnItem[]
+
+  @@unique([shopId, imei1])
+  @@unique([shopId, imei2]) // NULL imei2 allowed many times
+  @@index([productId, status])
+  @@index([shopId, status])
+  @@index([purchaseItemId])
+  @@map("inventory_units")
+}
+
+// Current quantity for QUANTITY products (chargers, covers ...).
+// Updated in the same transaction as every inventory movement.
+model StockLevel {
+  productId      String   @id @map("product_id") @db.Uuid
+  shopId         String   @map("shop_id") @db.Uuid
+  quantityOnHand Int      @default(0) @map("quantity_on_hand") // CHECK >= 0 in constraints.sql
+  avgUnitCost    BigInt   @default(0) @map("avg_unit_cost") // simple average cost, for profit
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Restrict)
+  shop    Shop    @relation(fields: [shopId], references: [id], onDelete: Restrict)
+
+  @@index([shopId])
+  @@map("stock_levels")
+}
+
+// Append-only stock history: "why did stock change?"
+model InventoryMovement {
+  id              String                @id @default(uuid(7)) @db.Uuid
+  shopId          String                @map("shop_id") @db.Uuid
+  productId       String                @map("product_id") @db.Uuid
+  inventoryUnitId String?               @map("inventory_unit_id") @db.Uuid
+  type            InventoryMovementType
+  quantityChange  Int                   @map("quantity_change") // +in / -out
+  reason          String? // required for ADJUSTMENT, DAMAGED, LOST (service rule)
+  referenceType   ReferenceType?        @map("reference_type")
+  referenceId     String?               @map("reference_id") @db.Uuid // polymorphic, no FK
+  createdAt       DateTime              @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  shop          Shop           @relation(fields: [shopId], references: [id], onDelete: Restrict)
+  product       Product        @relation(fields: [productId], references: [id], onDelete: Restrict)
+  inventoryUnit InventoryUnit? @relation(fields: [inventoryUnitId], references: [id], onDelete: Restrict)
+
+  @@index([shopId, productId, createdAt])
+  @@index([inventoryUnitId])
+  @@index([referenceType, referenceId])
+  @@map("inventory_movements")
+}

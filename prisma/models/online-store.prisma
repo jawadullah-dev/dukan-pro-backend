@@ -1,0 +1,31 @@
+// =============================================================================
+// RELEASE 1.2 : ONLINE STORE
+// =============================================================================
+
+// One row per shop. Every field here is intentionally PUBLIC (or controls what is public).
+// The owner's login phone (users.phone) is never used here.
+model ShopStoreSettings {
+  shopId         String  @id @map("shop_id") @db.Uuid
+  slug           String  @unique // subdomain / URL part, e.g. "khalid-mobile"
+  isEnabled      Boolean @default(false) @map("is_enabled") // owner switch; store is invisible until true
+  displayName    String  @map("display_name")
+  about          String?
+  logoUrl        String? @map("logo_url")
+  bannerUrl      String? @map("banner_url")
+  whatsappNumber String? @map("whatsapp_number") // digits only, with country code: 923001234567
+  phoneNumber    String? @map("phone_number")
+  address        String?
+  city           String?
+  googleMapsUrl  String? @map("google_maps_url")
+  openingHours   String? @map("opening_hours")
+  facebookUrl    String? @map("facebook_url")
+  instagramUrl   String? @map("instagram_url")
+  showExactStock Boolean @default(false) @map("show_exact_stock") // false = only "In stock / Low / Out"
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  shop Shop @relation(fields: [shopId], references: [id], onDelete: Restrict)
+
+  @@map("shop_store_settings")
+}

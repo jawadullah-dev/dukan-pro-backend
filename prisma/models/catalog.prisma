@@ -1,0 +1,106 @@
+// =============================================================================
+// MODULE 3 : CATEGORIES, BRANDS, PRODUCTS (+ Release 1.2 product images)
+// =============================================================================
+
+model Category {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  shopId    String   @map("shop_id") @db.Uuid
+  name      String
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  shop     Shop      @relation(fields: [shopId], references: [id], onDelete: Restrict)
+  products Product[]
+
+  @@unique([shopId, name])
+  @@map("categories")
+}
+
+model Brand {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  shopId    String   @map("shop_id") @db.Uuid
+  name      String
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  shop     Shop      @relation(fields: [shopId], references: [id], onDelete: Restrict)
+  products Product[]
+
+  @@unique([shopId, name])
+  @@map("brands")
+}
+
+model Product {
+  id           String       @id @default(uuid(7)) @db.Uuid
+  shopId       String       @map("shop_id") @db.Uuid
+  categoryId   String       @map("category_id") @db.Uuid
+  brandId      String       @map("brand_id") @db.Uuid
+  name         String
+  // Cannot change after the first transaction (enforced in the service).
+  trackingType TrackingType @map("tracking_type")
+
+  // optional details
+  model       String?
+  color       String?
+  ram         String?
+  storage     String?
+  sku         String?
+  barcode     String?
+  description String?
+  imageUrl    String? @map("image_url")
+
+  // suggestions only; real prices live in purchase_items / sale_items
+  defaultPurchasePrice BigInt  @default(0) @map("default_purchase_price")
+  defaultSellingPrice  BigInt  @default(0) @map("default_selling_price")
+  lowStockThreshold    Int     @default(0) @map("low_stock_threshold")
+  isActive             Boolean @default(true) @map("is_active")
+
+  // ---- Release 1.2: Online Store ----
+  isPublished       Boolean    @default(false) @map("is_published") // false = never public by accident
+  publishedAt       DateTime?  @map("published_at") @db.Timestamptz(3) // set automatically by a trigger
+  publicDescription String?    @map("public_description") // what customers read; `description` stays private
+  contactForPrice   Boolean    @default(false) @map("contact_for_price") // hide the price, show "Contact for price"
+  ptaStatus         PtaStatus? @map("pta_status")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  shop     Shop     @relation(fields: [shopId], references: [id], onDelete: Restrict)
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  brand    Brand    @relation(fields: [brandId], references: [id], onDelete: Restrict)
+
+  stockLevel         StockLevel? // QUANTITY products only
+  purchaseItems      PurchaseItem[]
+  inventoryUnits     InventoryUnit[]
+  inventoryMovements InventoryMovement[]
+  saleItems          SaleItem[]
+  images             ProductImage[]
+
+  @@unique([shopId, name])
+  @@unique([shopId, sku]) // NULL skus are allowed many times in PostgreSQL
+  @@unique([shopId, barcode])
+  @@index([shopId, categoryId])
+  @@index([shopId, brandId])
+  @@index([shopId, isActive])
+  @@map("products")
+}
+
+// Photos for the storefront. The first image (lowest sortOrder) is the cover.
+// Max images per product (suggested 5) is enforced in the service. (Release 1.2)
+model ProductImage {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  shopId    String   @map("shop_id") @db.Uuid
+  productId String   @map("product_id") @db.Uuid
+  url       String
+  sortOrder Int      @default(0) @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  shop    Shop    @relation(fields: [shopId], references: [id], onDelete: Restrict)
+  product Product @relation(fields: [productId], references: [id], onDelete: Restrict)
+
+  @@index([productId, sortOrder])
+  @@index([shopId])
+  @@map("product_images")
+}

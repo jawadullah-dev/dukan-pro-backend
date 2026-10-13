@@ -1,0 +1,99 @@
+// =============================================================================
+// MODULE 1 + 2 : SHOP (TENANT), USER, PLATFORM ADMIN
+// =============================================================================
+
+model Shop {
+  id                 String     @id @default(uuid(7)) @db.Uuid
+  name               String
+  phone              String?
+  address            String?
+  status             ShopStatus @default(ACTIVE)
+  subscriptionEndsAt DateTime   @map("subscription_ends_at") @db.Timestamptz(3)
+
+  // Automatic numbers (S-0001, P-0001). Read + increase inside the same transaction
+  // that saves the sale / purchase (UPDATE ... RETURNING).
+  nextSaleNo     Int @default(1) @map("next_sale_no")
+  nextPurchaseNo Int @default(1) @map("next_purchase_no")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  users               User[]
+  categories          Category[]
+  brands              Brand[]
+  products            Product[]
+  stockLevels         StockLevel[]
+  suppliers           Supplier[]
+  purchases           Purchase[]
+  purchaseItems       PurchaseItem[]
+  supplierPayments    SupplierPayment[]
+  inventoryUnits      InventoryUnit[]
+  inventoryMovements  InventoryMovement[]
+  customers           Customer[]
+  sales               Sale[]
+  saleItems           SaleItem[]
+  payments            Payment[]
+  expenseCategories   ExpenseCategory[]
+  expenses            Expense[]
+  cashMovements       CashMovement[]
+  saleReturns         SaleReturn[]
+  returnItems         ReturnItem[]
+  refunds             Refund[]
+  cashReconciliations CashReconciliation[]
+  storeSettings       ShopStoreSettings?
+  productImages       ProductImage[]
+
+  @@map("shops")
+}
+
+model User {
+  id     String @id @default(uuid(7)) @db.Uuid
+  shopId String @map("shop_id") @db.Uuid
+  name   String
+  phone  String @unique // login = phone + password, unique across the platform
+
+  // null until the owner opens the one-time setup link and chooses a password.
+  passwordHash           String?   @map("password_hash")
+  passwordSetupTokenHash String?   @map("password_setup_token_hash")
+  passwordSetupExpiresAt DateTime? @map("password_setup_expires_at") @db.Timestamptz(3)
+
+  role   UserRole   @default(OWNER)
+  status UserStatus @default(ACTIVE)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  shop Shop @relation(fields: [shopId], references: [id], onDelete: Restrict)
+
+  // audit back-relations
+  createdSales              Sale[]               @relation("SaleCreatedBy")
+  cancelledSales            Sale[]               @relation("SaleCancelledBy")
+  createdPurchases          Purchase[]           @relation("PurchaseCreatedBy")
+  cancelledPurchases        Purchase[]           @relation("PurchaseCancelledBy")
+  createdPayments           Payment[]            @relation("PaymentCreatedBy")
+  cancelledPayments         Payment[]            @relation("PaymentCancelledBy")
+  createdSupplierPayments   SupplierPayment[]    @relation("SupplierPaymentCreatedBy")
+  cancelledSupplierPayments SupplierPayment[]    @relation("SupplierPaymentCancelledBy")
+  createdExpenses           Expense[]            @relation("ExpenseCreatedBy")
+  cancelledExpenses         Expense[]            @relation("ExpenseCancelledBy")
+  createdCashMovements      CashMovement[]       @relation("CashMovementCreatedBy")
+  createdReturns            SaleReturn[]         @relation("ReturnCreatedBy")
+  createdRefunds            Refund[]             @relation("RefundCreatedBy")
+  createdReconciliations    CashReconciliation[] @relation("ReconciliationCreatedBy")
+
+  @@index([shopId])
+  @@map("users")
+}
+
+// The SaaS admin who creates shops. Lives OUTSIDE the tenant tables (no shop_id).
+model PlatformAdmin {
+  id           String   @id @default(uuid(7)) @db.Uuid
+  name         String
+  phone        String   @unique
+  passwordHash String   @map("password_hash")
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@map("platform_admins")
+}

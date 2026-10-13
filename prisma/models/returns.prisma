@@ -1,0 +1,71 @@
+// =============================================================================
+// RELEASE 1.1 : RETURNS, REFUNDS
+// =============================================================================
+
+// Named SaleReturn because "return" is a reserved word in JavaScript (prisma.return).
+model SaleReturn {
+  id           String       @id @default(uuid(7)) @db.Uuid
+  shopId       String       @map("shop_id") @db.Uuid
+  saleId       String       @map("sale_id") @db.Uuid
+  customerId   String?      @map("customer_id") @db.Uuid
+  returnDate   DateTime     @map("return_date") @db.Timestamptz(3)
+  reason       String // required
+  returnAmount BigInt       @map("return_amount")
+  status       RecordStatus @default(ACTIVE)
+  notes        String?
+  createdById  String       @map("created_by_id") @db.Uuid
+  createdAt    DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  shop      Shop      @relation(fields: [shopId], references: [id], onDelete: Restrict)
+  sale      Sale      @relation(fields: [saleId], references: [id], onDelete: Restrict)
+  customer  Customer? @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  createdBy User      @relation("ReturnCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+
+  items   ReturnItem[]
+  refunds Refund[]
+
+  @@index([shopId, returnDate])
+  @@index([saleId])
+  @@map("returns")
+}
+
+model ReturnItem {
+  id              String          @id @default(uuid(7)) @db.Uuid
+  shopId          String          @map("shop_id") @db.Uuid
+  returnId        String          @map("return_id") @db.Uuid
+  saleItemId      String          @map("sale_item_id") @db.Uuid
+  inventoryUnitId String?         @map("inventory_unit_id") @db.Uuid
+  quantity        Int
+  condition       ReturnCondition
+
+  shop          Shop           @relation(fields: [shopId], references: [id], onDelete: Restrict)
+  saleReturn    SaleReturn     @relation(fields: [returnId], references: [id], onDelete: Restrict)
+  saleItem      SaleItem       @relation(fields: [saleItemId], references: [id], onDelete: Restrict)
+  inventoryUnit InventoryUnit? @relation(fields: [inventoryUnitId], references: [id], onDelete: Restrict)
+
+  // A phone line (quantity 1) can be returned once. NULL unit (accessories) = partial returns allowed.
+  @@unique([saleItemId, inventoryUnitId])
+  @@index([returnId])
+  @@map("return_items")
+}
+
+model Refund {
+  id          String        @id @default(uuid(7)) @db.Uuid
+  shopId      String        @map("shop_id") @db.Uuid
+  returnId    String        @map("return_id") @db.Uuid
+  amount      BigInt
+  refundDate  DateTime      @map("refund_date") @db.Timestamptz(3)
+  method      PaymentMethod @default(CASH)
+  notes       String?
+  createdById String        @map("created_by_id") @db.Uuid
+  createdAt   DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  shop       Shop       @relation(fields: [shopId], references: [id], onDelete: Restrict)
+  saleReturn SaleReturn @relation(fields: [returnId], references: [id], onDelete: Restrict)
+  createdBy  User       @relation("RefundCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@index([returnId])
+  @@index([shopId, refundDate])
+  @@map("refunds")
+}

@@ -1,0 +1,43 @@
+// =============================================================================
+// MODULE 7 : EXPENSES
+// =============================================================================
+
+model ExpenseCategory {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  shopId    String   @map("shop_id") @db.Uuid
+  name      String
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  shop     Shop      @relation(fields: [shopId], references: [id], onDelete: Restrict)
+  expenses Expense[]
+
+  @@unique([shopId, name])
+  @@map("expense_categories")
+}
+
+model Expense {
+  id            String       @id @default(uuid(7)) @db.Uuid
+  shopId        String       @map("shop_id") @db.Uuid
+  categoryId    String       @map("category_id") @db.Uuid
+  amount        BigInt
+  expenseDate   DateTime     @map("expense_date") @db.Date
+  description   String?
+  status        RecordStatus @default(ACTIVE)
+  cancelledAt   DateTime?    @map("cancelled_at") @db.Timestamptz(3)
+  cancelReason  String?      @map("cancel_reason")
+  cancelledById String?      @map("cancelled_by_id") @db.Uuid
+  createdById   String       @map("created_by_id") @db.Uuid
+  createdAt     DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  shop        Shop            @relation(fields: [shopId], references: [id], onDelete: Restrict)
+  category    ExpenseCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  createdBy   User            @relation("ExpenseCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  cancelledBy User?           @relation("ExpenseCancelledBy", fields: [cancelledById], references: [id], onDelete: Restrict)
+
+  @@index([shopId, expenseDate])
+  @@index([categoryId])
+  @@map("expenses")
+}
