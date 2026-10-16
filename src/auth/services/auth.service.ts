@@ -41,6 +41,16 @@ import {
 import { PasswordSetupLinkResponseDto } from '../dto/password-setup-link-response.dto.js';
 import { MeResponseDto } from '../dto/me-response.dto.js';
 import { StatusBaseResponseDTO } from '../../common-dto/response/status-base-response.dto.js';
+import { RegisterOwnerDto } from '../dto/register-owner.dto.js';
+import {
+  DEFAULT_CATEGORIES,
+  DEFAULT_EXPENSE_CATEGORIES,
+  WALK_IN_SUPPLIER,
+} from '../../platform-admin/constants/default-lists.constant.js';
+import {
+  nextFreeStoreSlug,
+  storeSlugBase,
+} from '../../store/helpers/store-slug.helper.js';
 
 /**
  * A real bcrypt hash of a value nobody can guess, used only to keep the
@@ -62,6 +72,148 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly configService: AppConfigurationService,
   ) {}
+
+  /**
+   * Self-serve shop owner registration.
+   * Creates owner account + new shop + starter categories & default settings.
+   */
+  async registerOwner(dto: RegisterOwnerDto): Promise<OwnerLoginResponseDto> {
+    const ownerPhone = normalizePhone(dto.phone);
+    if (!ownerPhone) {
+      throw new BadRequestException(
+        'Please provide a valid Pakistani mobile number (e.g. 03001234567)',
+      );
+    }
+
+    const existingUser = await this.prisma.user.findUnique({
+      where: { phone: ownerPhone },
+    });
+    if (existingUser) {
+      throw new BadRequestException(
+        'This mobile number is already registered. Please log in.',
+      );
+    }
+
+    const passwordHash = await bcrypt.hash(dto.password, 10);
+    const subscriptionEndsAt = new Date();
+    subscriptionEndsAt.setDate(subscriptionEndsAt.getDate() + 30);
+
+    const shopName = dto.shopName.trim();
+    const ownerName = (dto.fullName || dto.name)?.trim();
+    if (!ownerName) {
+      throw new BadRequestException('Full name is required');
+    }
+
+    const resolvedAddress = (dto.address || dto.shopAddress)?.trim() ?? null;
+    const resolvedCity = dto.city?.trim() ?? null;
+
+    const { shop, user } = await this.prisma.$transaction(async (tx) => {
+      const newShop = await tx.shop.create({
+        data: {
+          name: shopName,
+          phone: dto.shopPhone
+            ? normalizePhone(dto.shopPhone) ?? dto.shopPhone
+            : ownerPhone,
+          address: resolvedAddress,
+          status: ShopStatus.ACTIVE,
+          subscriptionEndsAt,
+        },
+      });
+
+      const newUser = await tx.user.create({
+        data: {
+          shopId: newShop.id,
+          name: ownerName,
+          phone: ownerPhone,
+          passwordHash,
+          role: 'OWNER',
+          status: UserStatus.ACTIVE,
+        },
+      });
+
+      if (DEFAULT_CATEGORIES.length > 0) {
+        await tx.category.createMany({
+          data: DEFAULT_CATEGORIES.map((name) => ({
+            shopId: newShop.id,
+            name,
+          })),
+        });
+      }
+
+      if (DEFAULT_EXPENSE_CATEGORIES.length > 0) {
+        await tx.expenseCategory.createMany({
+          data: DEFAULT_EXPENSE_CATEGORIES.map((name) => ({
+            shopId: newShop.id,
+            name,
+          })),
+        });
+      }
+
+      await tx.supplier.create({
+        data: {
+          shopId: newShop.id,
+          name: WALK_IN_SUPPLIER.name,
+          notes: WALK_IN_SUPPLIER.notes,
+          isSystem: WALK_IN_SUPPLIER.isSystem,
+        },
+      });
+
+      const storeSlug = await nextFreeStoreSlug(
+        storeSlugBase(newShop.name, newShop.id),
+        async (candidate) =>
+          Boolean(
+            await tx.shopStoreSettings.findUnique({
+              where: { slug: candidate },
+              select: { slug: true },
+            }),
+          ),
+      );
+
+      await tx.shopStoreSettings.create({
+        data: {
+          shopId: newShop.id,
+          slug: storeSlug,
+          isEnabled: true,
+          displayName: newShop.name.trim().slice(0, 100),
+          phoneNumber: newShop.phone,
+          address: resolvedAddress,
+          city: resolvedCity,
+        },
+      });
+
+      return { shop: newShop, user: newUser };
+    });
+
+    logInfo(
+      'auth.service.ts',
+      'registerOwner',
+      `Owner "${ownerName}" registered with shop "${shopName}"`,
+    );
+
+    const accessToken = await this.signToken({
+      sub: user.id,
+      typ: AuthTokenType.OWNER,
+      shopId: user.shopId,
+      role: user.role,
+    });
+
+    return {
+      accessToken,
+      tokenType: 'Bearer',
+      expiresIn: this.configService.jwtExpiresIn,
+      user: {
+        id: user.id,
+        name: user.name,
+        phone: user.phone,
+        role: user.role,
+      },
+      shopId: user.shopId,
+      shop: {
+        name: shop.name,
+        subscriptionEndsAt: shop.subscriptionEndsAt,
+      },
+    };
+  }
 
   /**
    * WF2 — owner login. Phone + password, then JWT carrying shopId.

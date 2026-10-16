@@ -162,3 +162,12 @@ export class ResponseStoreCategoriesDto {
   @ApiProperty({ type: [StoreFilterOptionDto] })
   brands: StoreFilterOptionDto[];
 }
+
+export class ResponseStoreListItemDto extends ResponseStoreDto {
+  @ApiPropertyOptional({
+    description: 'Count of active and published products in this store.',
+    example: 45,
+  })
+  totalProducts?: number;
+}
+

@@ -24,8 +24,10 @@ import {
   ResponseStoreDto,
   ResponseStoreProductDto,
   ResponseStoreCategoriesDto,
+  ResponseStoreListItemDto,
 } from '../dto/response-storefront.dto.js';
 import { StoreProductsQueryDto } from '../dto/store-products-query.dto.js';
+import { StoreListQueryDto } from '../dto/store-list-query.dto.js';
 import { logError } from '../../helpers/logger-helper.js';
 import { StorefrontService } from '../services/storefront.service.js';
 
@@ -44,6 +46,37 @@ const CACHE_CONTROL = 'public, s-maxage=60, stale-while-revalidate=300';
 @UseGuards(RateLimitGuard)
 export class StorefrontController {
   constructor(private readonly storefrontService: StorefrontService) {}
+
+  @Get('/')
+  @ApiOperation({
+    summary: 'Public list of all active stores',
+    description:
+      'NO authentication. Allows customers to search and discover shops by name, city, location, or product catalog.',
+  })
+  @ApiSuccessResponseDecorator(
+    OK_RESPONSE_STATUS(
+      PaginatedResponseDTO,
+      'Stores fetched successfully',
+    ),
+  )
+  @ApiResponse(BAD_REQUEST_RESPONSE)
+  @ApiResponse(INTERNAL_SERVER_ERROR_RESPONSE)
+  async getStores(
+    @Query() query: StoreListQueryDto,
+    @Res({ passthrough: true }) res: Response,
+  ): Promise<
+    ApiSuccessResponseDTO<PaginatedResponseDTO<ResponseStoreListItemDto>>
+  > {
+    try {
+      const data = await this.storefrontService.getStores(query);
+      res.set('Cache-Control', CACHE_CONTROL);
+      return new ApiSuccessResponseDTO('Stores fetched successfully', data);
+    } catch (error) {
+      logError('storefront.controller.ts', 'getStores', error, { query });
+      if (error instanceof HttpException) throw error;
+      throw new InternalServerErrorException('Failed to fetch stores');
+    }
+  }
 
   @Get('/:slug')
   @ApiOperation({

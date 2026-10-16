@@ -29,6 +29,7 @@ import { AuthGuard } from '../../auth-guards/auth-guard.js';
 import { logError } from '../../helpers/logger-helper.js';
 import { AuthService } from '../services/auth.service.js';
 import { OwnerLoginDto } from '../dto/owner-login.dto.js';
+import { RegisterOwnerDto } from '../dto/register-owner.dto.js';
 import { PlatformAdminLoginDto } from '../dto/platform-admin-login.dto.js';
 import { SetupPasswordDto } from '../dto/setup-password.dto.js';
 import { ChangePasswordDto } from '../dto/change-password.dto.js';
@@ -51,6 +52,31 @@ const rethrowOrDefault = (error: unknown, fallback: string): HttpException => {
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
+
+  @Post('register')
+  @ApiOperation({
+    summary: 'Self-serve register a new shop owner and shop',
+    description:
+      'Creates owner account, new shop with 30-day trial subscription, default starter categories and store settings. Returns login JWT directly.',
+  })
+  @ApiSuccessResponseDecorator(
+    OK_RESPONSE_STATUS(OwnerLoginResponseDto, 'Registered and logged in successfully'),
+  )
+  @ApiResponse(BAD_REQUEST_RESPONSE)
+  @ApiResponse(INTERNAL_SERVER_ERROR_RESPONSE)
+  async register(
+    @Body() registerOwnerDto: RegisterOwnerDto,
+  ): Promise<ApiSuccessResponseDTO<OwnerLoginResponseDto>> {
+    try {
+      const res = await this.authService.registerOwner(registerOwnerDto);
+      return new ApiSuccessResponseDTO('Registered and logged in successfully', res);
+    } catch (error) {
+      logError('auth.controller.ts', 'register', error);
+      if (error instanceof HttpException) throw error;
+      const msg = error instanceof Error ? error.message : String(error);
+      throw new InternalServerErrorException(`Failed to register account and shop: ${msg}`);
+    }
+  }
 
   @Post('login')
   @ApiOperation({

@@ -6,10 +6,12 @@ import {
   ResponseStoreDto,
   ResponseStoreProductDto,
   ResponseStoreCategoriesDto,
+  ResponseStoreListItemDto,
   StoreFilterOptionDto,
   StoreAvailability,
 } from '../dto/response-storefront.dto.js';
 import { StoreProductsQueryDto } from '../dto/store-products-query.dto.js';
+import { StoreListQueryDto } from '../dto/store-list-query.dto.js';
 import { StoreCacheService } from './store-cache.service.js';
 import {
   resourceNotFound,
@@ -83,6 +85,66 @@ export class StorefrontService {
   // -------------------------------------------------------------------------
   // Public routes — by slug (no login)
   // -------------------------------------------------------------------------
+
+  /** GET /public/stores — search & discover all public active stores. */
+  async getStores(
+    query: StoreListQueryDto,
+  ): Promise<PaginatedResponseDTO<ResponseStoreListItemDto>> {
+    const page = query.page ?? 1;
+    const limit = query.limit ?? 12;
+    const skip = getSkipNumber(page, limit);
+
+    const where: Prisma.ShopStoreSettingsWhereInput = {
+      isEnabled: true,
+      shop: {
+        status: ShopStatus.ACTIVE,
+      },
+    };
+
+    if (query.city) {
+      where.city = { contains: query.city, mode: 'insensitive' };
+    }
+
+    if (query.q) {
+      where.OR = [
+        { displayName: { contains: query.q, mode: 'insensitive' } },
+        { address: { contains: query.q, mode: 'insensitive' } },
+        { city: { contains: query.q, mode: 'insensitive' } },
+        { about: { contains: query.q, mode: 'insensitive' } },
+        { shop: { name: { contains: query.q, mode: 'insensitive' } } },
+      ];
+    }
+
+    const [total, rows] = await Promise.all([
+      this.prisma.shopStoreSettings.count({ where }),
+      this.prisma.shopStoreSettings.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { updatedAt: 'desc' },
+        include: {
+          shop: {
+            select: {
+              _count: {
+                select: {
+                  products: {
+                    where: { isPublished: true, isActive: true },
+                  },
+                },
+              },
+            },
+          },
+        },
+      }),
+    ]);
+
+    const items: ResponseStoreListItemDto[] = rows.map((r) => ({
+      ...this.toProfile(r),
+      totalProducts: r.shop?._count?.products ?? 0,
+    }));
+
+    return new PaginatedResponseDTO(items, total, page, limit);
+  }
 
   /** GET /public/stores/:slug — the public profile (allowlist). */
   async getStore(slug: string): Promise<ResponseStoreDto> {
